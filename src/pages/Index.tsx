@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import type { ApiResponse, Licitacion, LicitacionDetalle, CPV } from "@/types/licitacion";
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = "https://1ab90ef1b4ad.ngrok-free.app";
 
 const Index = () => {
   const [provinciasSeleccionadas, setProvinciasSeleccionadas] = useState<string[]>([]);
