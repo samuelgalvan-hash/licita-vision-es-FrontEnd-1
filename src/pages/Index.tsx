@@ -43,7 +43,21 @@ const Index = () => {
     queryFn: async () => {
       const response = await fetch(`${API_BASE_URL}/cpv_licitaciones`);
       if (!response.ok) throw new Error('Error al obtener CPVs');
-      return response.json();
+      const data = await response.json();
+      
+      // Validar y transformar si results es un objeto en lugar de array
+      if (data.results && typeof data.results === 'object' && !Array.isArray(data.results)) {
+        console.warn('CPV endpoint returned object instead of array, transforming...');
+        // Convertir objeto a array de CPVs
+        const cpvArray = Object.keys(data.results).map(key => ({
+          code: key,
+          description: data.results[key] || undefined,
+          count: 1
+        }));
+        return { ...data, results: cpvArray };
+      }
+      
+      return data;
     },
     enabled: provinciasSeleccionadas.length > 0 && !!licitaciones,
   });
