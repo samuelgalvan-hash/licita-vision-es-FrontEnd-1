@@ -32,3 +32,8 @@ export interface ApiResponse<T> {
   results: T[];
   count: number;
 }
+
+export interface CPVResponse {
+  cpvs: CPV[];
+  count: number;
+}

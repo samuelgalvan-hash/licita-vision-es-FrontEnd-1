@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import type { ApiResponse, Licitacion, LicitacionDetalle, CPV } from "@/types/licitacion";
+import type { ApiResponse, Licitacion, LicitacionDetalle, CPV, CPVResponse } from "@/types/licitacion";
 
 const API_BASE_URL = "https://licitaciones-7q8a.onrender.com";
 
@@ -38,7 +38,7 @@ const Index = () => {
   });
 
   // Query para obtener CPVs automáticamente
-  const { data: cpvsData, isLoading: loadingCPVs, error: errorCPVs } = useQuery<ApiResponse<CPV>>({
+  const { data: cpvsData, isLoading: loadingCPVs, error: errorCPVs } = useQuery<CPVResponse>({
     queryKey: ['cpvs', provinciasSeleccionadas],
     queryFn: async () => {
       const response = await fetch(`${API_BASE_URL}/cpv_disponibles`);
@@ -46,21 +46,7 @@ const Index = () => {
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Error al obtener CPVs');
       }
-      const data = await response.json();
-      
-      // Validar que results sea un array de CPVs válidos
-      if (data.results && Array.isArray(data.results)) {
-        return data;
-      }
-      
-      // Si results es un objeto (URLs), mostrar advertencia y retornar vacío
-      if (data.results && typeof data.results === 'object') {
-        console.error('El endpoint /cpv_licitaciones debe devolver códigos CPV, no URLs');
-        toast.error('El backend no está devolviendo códigos CPV válidos');
-        return { count: 0, results: [] };
-      }
-      
-      return data;
+      return response.json();
     },
     enabled: provinciasSeleccionadas.length > 0 && !!licitaciones,
     retry: false,
@@ -155,7 +141,7 @@ const Index = () => {
                 {provinciasSeleccionadas.length > 0 && (
                   <div className="pt-4 border-t border-border">
                     <CPVFilter
-                      cpvs={cpvsData?.results || []}
+                      cpvs={cpvsData?.cpvs || []}
                       selected={cpvsSeleccionados}
                       onChange={setCpvsSeleccionados}
                       disabled={loadingCPVs}
@@ -181,8 +167,7 @@ const Index = () => {
                       <Alert className="mt-2">
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription className="text-xs">
-                          El backend debe devolver códigos CPV válidos (ej: "45000000", "72000000"). 
-                          Actualmente está devolviendo URLs. Verifica el endpoint <code className="bg-muted px-1 py-0.5 rounded">/cpv_disponibles</code>.
+                          No hay códigos CPV disponibles en el backend. El endpoint devolvió una lista vacía.
                         </AlertDescription>
                       </Alert>
                     )}
