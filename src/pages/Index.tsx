@@ -38,28 +38,32 @@ const Index = () => {
   });
 
   // Query para obtener CPVs automáticamente
-  const { data: cpvsData, isLoading: loadingCPVs } = useQuery<ApiResponse<CPV>>({
+  const { data: cpvsData, isLoading: loadingCPVs, error: errorCPVs } = useQuery<ApiResponse<CPV>>({
     queryKey: ['cpvs', provinciasSeleccionadas],
     queryFn: async () => {
       const response = await fetch(`${API_BASE_URL}/cpv_licitaciones`);
-      if (!response.ok) throw new Error('Error al obtener CPVs');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Error al obtener CPVs');
+      }
       const data = await response.json();
       
-      // Validar y transformar si results es un objeto en lugar de array
-      if (data.results && typeof data.results === 'object' && !Array.isArray(data.results)) {
-        console.warn('CPV endpoint returned object instead of array, transforming...');
-        // Convertir objeto a array de CPVs
-        const cpvArray = Object.keys(data.results).map(key => ({
-          code: key,
-          description: data.results[key] || undefined,
-          count: 1
-        }));
-        return { ...data, results: cpvArray };
+      // Validar que results sea un array de CPVs válidos
+      if (data.results && Array.isArray(data.results)) {
+        return data;
+      }
+      
+      // Si results es un objeto (URLs), mostrar advertencia y retornar vacío
+      if (data.results && typeof data.results === 'object') {
+        console.error('El endpoint /cpv_licitaciones debe devolver códigos CPV, no URLs');
+        toast.error('El backend no está devolviendo códigos CPV válidos');
+        return { count: 0, results: [] };
       }
       
       return data;
     },
     enabled: provinciasSeleccionadas.length > 0 && !!licitaciones,
+    retry: false,
   });
 
   // Query para filtrar por CPVs
@@ -80,15 +84,23 @@ const Index = () => {
 
   // Obtener detalle de licitación
   const fetchDetalle = async (url: string) => {
+    const toastId = toast.loading('Cargando detalle de la licitación...');
     try {
       const response = await fetch(`${API_BASE_URL}/detalle_licitacion?url=${encodeURIComponent(url)}`);
-      if (!response.ok) throw new Error('Error al obtener detalle');
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Error al obtener detalle');
+      }
+      
       const data = await response.json();
       setLicitacionSeleccionada(data);
       setShowDetail(true);
-    } catch (error) {
-      toast.error('No se pudo cargar el detalle de la licitación');
-      console.error(error);
+      toast.success('Detalle cargado correctamente', { id: toastId });
+    } catch (error: any) {
+      const errorMessage = error.message || 'No se pudo cargar el detalle de la licitación';
+      toast.error(`Error: ${errorMessage}. Verifica que el backend esté funcionando correctamente.`, { id: toastId });
+      console.error('Error al obtener detalle:', error);
     }
   };
 
@@ -154,6 +166,25 @@ const Index = () => {
                         <Loader2 className="h-3 w-3 animate-spin" />
                         <span>Obteniendo códigos CPV...</span>
                       </div>
+                    )}
+                    
+                    {errorCPVs && (
+                      <Alert variant="destructive" className="mt-2">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription className="text-xs">
+                          Error al cargar CPVs: {errorCPVs.message}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    
+                    {!loadingCPVs && cpvsData && cpvsData.count === 0 && (
+                      <Alert className="mt-2">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription className="text-xs">
+                          El backend debe devolver códigos CPV válidos (ej: "45000000", "72000000"). 
+                          Actualmente está devolviendo URLs. Verifica el endpoint <code className="bg-muted px-1 py-0.5 rounded">/cpv_licitaciones</code>.
+                        </AlertDescription>
+                      </Alert>
                     )}
                   </div>
                 )}
@@ -273,9 +304,9 @@ const Index = () => {
                 </div>
 
                 <div className="grid gap-4">
-                  {licitacionesAMostrar.results.map((licitacion) => (
+                  {licitacionesAMostrar.results.map((licitacion, index) => (
                     <LicitacionCard
-                      key={licitacion.id}
+                      key={licitacion.id || `licitacion-${index}`}
                       licitacion={licitacion}
                       onViewDetail={() => fetchDetalle(licitacion.url)}
                     />
