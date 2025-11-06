@@ -41,7 +41,7 @@ const Index = () => {
   const { data: cpvsData, isLoading: loadingCPVs, error: errorCPVs } = useQuery<ApiResponse<CPV>>({
     queryKey: ['cpvs', provinciasSeleccionadas],
     queryFn: async () => {
-      const response = await fetch(`${API_BASE_URL}/cpv_licitaciones`);
+      const response = await fetch(`${API_BASE_URL}/cpv_disponibles`);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Error al obtener CPVs');
@@ -182,7 +182,7 @@ const Index = () => {
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription className="text-xs">
                           El backend debe devolver códigos CPV válidos (ej: "45000000", "72000000"). 
-                          Actualmente está devolviendo URLs. Verifica el endpoint <code className="bg-muted px-1 py-0.5 rounded">/cpv_licitaciones</code>.
+                          Actualmente está devolviendo URLs. Verifica el endpoint <code className="bg-muted px-1 py-0.5 rounded">/cpv_disponibles</code>.
                         </AlertDescription>
                       </Alert>
                     )}
