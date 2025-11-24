@@ -12,8 +12,14 @@ export interface Licitacion {
 export interface LicitacionDetalle extends Licitacion {
   cpv?: string[] | string;
   pliegos?: Pliego[];
+  pliegos_xml?: Pliego[];
   descripcion?: string;
   plazo_presentacion?: string;
+  entidad?: string;
+  estado?: string;
+  valor_estimado?: string;
+  fecha_limite?: string;
+  fecha_inicio?: string;
 }
 
 export interface Pliego {
