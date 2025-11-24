@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import type { ApiResponse, Licitacion, LicitacionDetalle, CPV, CPVResponse } from "@/types/licitacion";
 
-const API_BASE_URL = "licitaciones-production.up.railway.app";
+const API_BASE_URL = "https://licitaciones-production.up.railway.app";
 
 const Index = () => {
   const [provinciasSeleccionadas, setProvinciasSeleccionadas] = useState<string[]>([]);
