@@ -10,7 +10,7 @@ export interface Licitacion {
 }
 
 export interface LicitacionDetalle extends Licitacion {
-  cpv?: string[];
+  cpv?: string[] | string;
   pliegos?: Pliego[];
   descripcion?: string;
   plazo_presentacion?: string;

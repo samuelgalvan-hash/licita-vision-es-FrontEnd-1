@@ -20,6 +20,13 @@ interface LicitacionDetailProps {
 export function LicitacionDetail({ licitacion, open, onClose }: LicitacionDetailProps) {
   if (!licitacion) return null;
 
+  // Normalize CPV to always be an array
+  const cpvArray = licitacion.cpv 
+    ? Array.isArray(licitacion.cpv) 
+      ? licitacion.cpv 
+      : [licitacion.cpv]
+    : [];
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[85vh] p-0">
@@ -116,17 +123,17 @@ export function LicitacionDetail({ licitacion, open, onClose }: LicitacionDetail
             )}
 
             {/* Códigos CPV */}
-            {licitacion.cpv && licitacion.cpv.length > 0 && (
+            {cpvArray.length > 0 && (
               <>
                 <div>
                   <div className="flex items-center gap-2 mb-3">
                     <FileText className="h-4 w-4 text-accent" />
                     <h4 className="text-sm font-semibold text-foreground">
-                      Códigos CPV ({licitacion.cpv.length})
+                      Códigos CPV ({cpvArray.length})
                     </h4>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {licitacion.cpv.map((code, index) => (
+                    {cpvArray.map((code, index) => (
                       <Badge
                         key={index}
                         variant="secondary"
