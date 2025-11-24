@@ -37,7 +37,19 @@ const Index = () => {
     enabled: provinciasSeleccionadas.length > 0,
   });
 
-  // Query para obtener CPVs automáticamente
+  // Query para poblar CPVs en el backend (debe ejecutarse después de obtener licitaciones)
+  const { data: cpvsPoblados, isLoading: loadingPoblarCPVs } = useQuery({
+    queryKey: ['poblar-cpvs', provinciasSeleccionadas],
+    queryFn: async () => {
+      const response = await fetch(`${API_BASE_URL}/cpv_licitaciones`);
+      if (!response.ok) throw new Error('Error al poblar CPVs');
+      return response.json();
+    },
+    enabled: provinciasSeleccionadas.length > 0 && !!licitaciones && !loadingLicitaciones,
+    retry: 1,
+  });
+
+  // Query para obtener CPVs disponibles (después de poblarlos)
   const { data: cpvsData, isLoading: loadingCPVs, error: errorCPVs } = useQuery<CPVResponse>({
     queryKey: ['cpvs', provinciasSeleccionadas],
     queryFn: async () => {
@@ -48,7 +60,7 @@ const Index = () => {
       }
       return response.json();
     },
-    enabled: provinciasSeleccionadas.length > 0 && !!licitaciones,
+    enabled: provinciasSeleccionadas.length > 0 && !!licitaciones && !!cpvsPoblados,
     retry: false,
   });
 
@@ -100,7 +112,7 @@ const Index = () => {
     ? licitacionesFiltradas 
     : licitaciones;
 
-  const isLoading = loadingLicitaciones || loadingCPVs || loadingFiltradas;
+  const isLoading = loadingLicitaciones || loadingPoblarCPVs || loadingCPVs || loadingFiltradas;
 
   return (
     <div className="min-h-screen bg-background">
