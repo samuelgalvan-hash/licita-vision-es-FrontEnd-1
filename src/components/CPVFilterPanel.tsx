@@ -36,7 +36,7 @@ export function CPVFilterPanel({
 
   const filteredCPVs = cpvs.filter(
     (cpv) =>
-      cpv.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cpv.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       cpv.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
