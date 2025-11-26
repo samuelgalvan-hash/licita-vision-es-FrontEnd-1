@@ -1,128 +1,223 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { FileSearch, Loader2, AlertCircle } from "lucide-react";
-import { ProvinciasFilter } from "@/components/ProvinciasFilter";
-import { CPVFilter } from "@/components/CPVFilter";
-import { LicitacionCard } from "@/components/LicitacionCard";
-import { LicitacionDetail } from "@/components/LicitacionDetail";
-import { Button } from "@/components/ui/button";
+import { FileSearch, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import type { ApiResponse, Licitacion, LicitacionDetalle, CPV, CPVResponse } from "@/types/licitacion";
+
+import { WizardSteps } from "@/components/WizardSteps";
+import { ComunidadesSelector } from "@/components/ComunidadesSelector";
+import { LicitacionesList } from "@/components/LicitacionesList";
+import { CPVFilterPanel } from "@/components/CPVFilterPanel";
+import { LicitacionDetailView } from "@/components/LicitacionDetailView";
+
+import type {
+  Licitacion,
+  LicitacionDetalle,
+  CPV,
+  ApiResponse,
+  CPVResponse,
+} from "@/types/licitacion";
 
 const API_BASE_URL = "https://licitaciones-production.up.railway.app";
 
+type Step = 1 | 2 | 3 | 4;
+
 const Index = () => {
-  const [provinciasSeleccionadas, setProvinciasSeleccionadas] = useState<string[]>([]);
+  // Wizard state
+  const [currentStep, setCurrentStep] = useState<Step>(1);
+  
+  // Data state
+  const [comunidadesSeleccionadas, setComunidadesSeleccionadas] = useState<string[]>([]);
   const [cpvsSeleccionados, setCpvsSeleccionados] = useState<string[]>([]);
   const [licitacionSeleccionada, setLicitacionSeleccionada] = useState<LicitacionDetalle | null>(null);
-  const [showDetail, setShowDetail] = useState(false);
+  const [licitacionParaDetalle, setLicitacionParaDetalle] = useState<Licitacion | null>(null);
+  const [loadingDetailId, setLoadingDetailId] = useState<string | undefined>();
+  
+  // Stored data
+  const [licitacionesData, setLicitacionesData] = useState<ApiResponse<Licitacion> | null>(null);
+  const [cpvsData, setCpvsData] = useState<CPV[]>([]);
+  const [filteredLicitaciones, setFilteredLicitaciones] = useState<ApiResponse<Licitacion> | null>(null);
 
-  // Query para obtener licitaciones por provincias
+  // Step 1 -> 2: Search licitaciones
   const {
-    data: licitaciones,
-    isLoading: loadingLicitaciones,
+    refetch: fetchLicitaciones,
+    isFetching: loadingLicitaciones,
     error: errorLicitaciones,
   } = useQuery<ApiResponse<Licitacion>>({
-    queryKey: ["licitaciones", provinciasSeleccionadas],
+    queryKey: ["licitaciones", comunidadesSeleccionadas],
     queryFn: async () => {
-      if (provinciasSeleccionadas.length === 0) return { results: [], count: 0 };
-
       const params = new URLSearchParams();
-      provinciasSeleccionadas.forEach((p) => params.append("comunidades", p));
-      params.append("limit", "50");
+      comunidadesSeleccionadas.forEach((c) => params.append("comunidades", c));
+      params.append("limit", "100");
 
       const response = await fetch(`${API_BASE_URL}/licitaciones_es?${params}`);
       if (!response.ok) throw new Error("Error al obtener licitaciones");
-      return response.json();
+      const data = await response.json();
+      setLicitacionesData(data);
+      return data;
     },
-    enabled: provinciasSeleccionadas.length > 0,
+    enabled: false,
   });
 
-  // Query para poblar CPVs en el backend (debe ejecutarse después de obtener licitaciones)
-  const { data: cpvsPoblados, isLoading: loadingPoblarCPVs } = useQuery({
-    queryKey: ["poblar-cpvs", provinciasSeleccionadas],
+  // Step 2 -> 3: Populate CPVs
+  const {
+    refetch: fetchCPVLicitaciones,
+    isFetching: loadingCPVPoblacion,
+  } = useQuery({
+    queryKey: ["cpv-licitaciones"],
     queryFn: async () => {
       const response = await fetch(`${API_BASE_URL}/cpv_licitaciones`);
       if (!response.ok) throw new Error("Error al poblar CPVs");
       return response.json();
     },
-    enabled: provinciasSeleccionadas.length > 0 && !!licitaciones && !loadingLicitaciones,
-    retry: 1,
+    enabled: false,
   });
 
-  // Query para obtener CPVs disponibles (después de poblarlos)
+  // Get available CPVs
   const {
-    data: cpvsData,
-    isLoading: loadingCPVs,
+    refetch: fetchCPVsDisponibles,
+    isFetching: loadingCPVs,
     error: errorCPVs,
   } = useQuery<CPVResponse>({
-    queryKey: ["cpvs", provinciasSeleccionadas],
+    queryKey: ["cpvs-disponibles"],
     queryFn: async () => {
       const response = await fetch(`${API_BASE_URL}/cpv_disponibles`);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.detail || "Error al obtener CPVs");
       }
-      return response.json();
+      const data = await response.json();
+      setCpvsData(data.cpvs || []);
+      return data;
     },
-    enabled: provinciasSeleccionadas.length > 0 && !!licitaciones && !!cpvsPoblados,
-    retry: false,
+    enabled: false,
   });
 
-  // Query para filtrar por CPVs
+  // Filter by CPVs
   const {
-    data: licitacionesFiltradas,
-    isLoading: loadingFiltradas,
+    refetch: fetchFiltrarCPVs,
+    isFetching: loadingFiltradas,
     error: errorFiltradas,
   } = useQuery<ApiResponse<Licitacion>>({
-    queryKey: ["licitaciones-filtradas", cpvsSeleccionados],
+    queryKey: ["filtrar-cpvs", cpvsSeleccionados],
     queryFn: async () => {
-      if (cpvsSeleccionados.length === 0) return licitaciones!;
-
       const params = new URLSearchParams();
       cpvsSeleccionados.forEach((cpv) => params.append("cpvs", cpv));
 
       const response = await fetch(`${API_BASE_URL}/filtrar_cpvs?${params}`);
       if (!response.ok) throw new Error("Error al filtrar por CPVs");
-      return response.json();
+      const data = await response.json();
+      setFilteredLicitaciones(data);
+      return data;
     },
-    enabled: cpvsSeleccionados.length > 0 && !!licitaciones,
+    enabled: false,
   });
 
-  // Obtener detalle de licitación
-  const fetchDetalle = async (url: string) => {
-    const toastId = toast.loading("Cargando detalle de la licitación...");
-    try {
-      const response = await fetch(`${API_BASE_URL}/detalle_licitacion?url=${encodeURIComponent(url)}`);
+  // Handle search from step 1
+  const handleSearch = async () => {
+    if (comunidadesSeleccionadas.length === 0) {
+      toast.error("Selecciona al menos una comunidad autónoma");
+      return;
+    }
 
+    toast.loading("Buscando licitaciones...", { id: "search" });
+    
+    try {
+      const result = await fetchLicitaciones();
+      if (result.data) {
+        toast.success(`Se encontraron ${result.data.count} licitaciones`, { id: "search" });
+        setCurrentStep(2);
+        
+        // Auto-fetch CPVs
+        await fetchCPVLicitaciones();
+        await fetchCPVsDisponibles();
+      }
+    } catch (error) {
+      toast.error("Error al buscar licitaciones", { id: "search" });
+    }
+  };
+
+  // Handle view detail
+  const handleViewDetail = async (licitacion: Licitacion) => {
+    const id = licitacion.id || `${licitacion.title}`;
+    setLoadingDetailId(id);
+    setLicitacionParaDetalle(licitacion);
+
+    toast.loading("Cargando detalle...", { id: "detail" });
+
+    try {
+      const params = new URLSearchParams();
+      params.append("url", licitacion.url);
+      if (licitacion.feed_origen) {
+        params.append("feed", licitacion.feed_origen);
+      }
+
+      const response = await fetch(`${API_BASE_URL}/detalle_licitacion?${params}`);
+      
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.detail || "Error al obtener detalle");
       }
 
-      const data = await response.json();
+      const data: LicitacionDetalle = await response.json();
+      
+      // Add feed_origen and url from the original licitacion
+      data.feed_origen = licitacion.feed_origen;
+      data.url = licitacion.url;
+      
       setLicitacionSeleccionada(data);
-      setShowDetail(true);
-      toast.success("Detalle cargado correctamente", { id: toastId });
+      setCurrentStep(4);
+      toast.success("Detalle cargado", { id: "detail" });
     } catch (error: any) {
-      const errorMessage = error.message || "No se pudo cargar el detalle de la licitación";
-      toast.error(`Error: ${errorMessage}. Verifica que el backend esté funcionando correctamente.`, { id: toastId });
+      toast.error(`Error: ${error.message}`, { id: "detail" });
       console.error("Error al obtener detalle:", error);
+    } finally {
+      setLoadingDetailId(undefined);
     }
   };
 
-  // Resetear CPVs cuando cambian las provincias
-  useEffect(() => {
+  // Handle CPV filter
+  const handleApplyFilter = async () => {
+    if (cpvsSeleccionados.length === 0) return;
+    
+    toast.loading("Filtrando por CPV...", { id: "filter" });
+    
+    try {
+      const result = await fetchFiltrarCPVs();
+      if (result.data) {
+        toast.success(`${result.data.count} licitaciones filtradas`, { id: "filter" });
+      }
+    } catch (error) {
+      toast.error("Error al filtrar", { id: "filter" });
+    }
+  };
+
+  const handleClearFilter = () => {
     setCpvsSeleccionados([]);
-  }, [provinciasSeleccionadas]);
+    setFilteredLicitaciones(null);
+  };
 
-  // Determinar qué licitaciones mostrar
-  const licitacionesAMostrar = cpvsSeleccionados.length > 0 ? licitacionesFiltradas : licitaciones;
+  // Navigate back
+  const handleBackToStep1 = () => {
+    setCurrentStep(1);
+    setComunidadesSeleccionadas([]);
+    setLicitacionesData(null);
+    setCpvsData([]);
+    setFilteredLicitaciones(null);
+    setCpvsSeleccionados([]);
+  };
 
-  const isLoading = loadingLicitaciones || loadingPoblarCPVs || loadingCPVs || loadingFiltradas;
+  const handleBackToStep2 = () => {
+    setCurrentStep(2);
+    setLicitacionSeleccionada(null);
+  };
+
+  // Determine which licitaciones to show
+  const licitacionesToShow = filteredLicitaciones || licitacionesData;
+
+  const isLoadingCPVs = loadingCPVPoblacion || loadingCPVs;
 
   return (
     <div className="min-h-screen bg-background">
@@ -134,177 +229,103 @@ const Index = () => {
               <FileSearch className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Explorador de Licitaciones Públicas</h1>
-              <p className="text-sm text-muted-foreground">Plataforma de Contratación del Estado - España</p>
+              <h1 className="text-2xl font-bold text-foreground">
+                Explorador de Licitaciones Públicas
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Plataforma de Contratación del Estado - España
+              </p>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Sidebar - Filtros */}
-          <aside className="lg:col-span-1 space-y-6">
-            <Card className="p-5 shadow-md">
-              <h2 className="text-lg font-semibold text-foreground mb-4">Filtros de búsqueda</h2>
+      <main className="container mx-auto px-4 py-8">
+        {/* Wizard Steps */}
+        <WizardSteps currentStep={currentStep} />
 
-              <div className="space-y-6">
-                {/* Filtro de provincias */}
-                <ProvinciasFilter selected={provinciasSeleccionadas} onChange={setProvinciasSeleccionadas} />
+        {/* Error handling */}
+        {(errorLicitaciones || errorFiltradas) && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Error de conexión con el backend. Verifica que el servidor esté activo en {API_BASE_URL}
+            </AlertDescription>
+          </Alert>
+        )}
 
-                {/* Filtro de CPVs */}
-                {provinciasSeleccionadas.length > 0 && (
-                  <div className="pt-4 border-t border-border">
-                    <CPVFilter
-                      cpvs={cpvsData?.cpvs || []}
-                      selected={cpvsSeleccionados}
-                      onChange={setCpvsSeleccionados}
-                      disabled={loadingCPVs}
-                    />
+        {/* Step 1: Community selection */}
+        {currentStep === 1 && (
+          <ComunidadesSelector
+            selected={comunidadesSeleccionadas}
+            onChange={setComunidadesSeleccionadas}
+            onSearch={handleSearch}
+            isLoading={loadingLicitaciones}
+          />
+        )}
 
-                    {loadingCPVs && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        <span>Obteniendo códigos CPV...</span>
-                      </div>
-                    )}
+        {/* Step 2 & 3: Licitaciones list with CPV filter */}
+        {(currentStep === 2 || currentStep === 3) && licitacionesData && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main content */}
+            <div className="lg:col-span-2">
+              <LicitacionesList
+                licitaciones={licitacionesToShow?.results || []}
+                count={licitacionesToShow?.count || 0}
+                onViewDetail={handleViewDetail}
+                onBack={handleBackToStep1}
+                isLoadingDetail={!!loadingDetailId}
+                loadingDetailId={loadingDetailId}
+              />
+            </div>
 
-                    {errorCPVs && (
-                      <Alert variant="destructive" className="mt-2">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription className="text-xs">
-                          Error al cargar CPVs: {errorCPVs.message}
-                        </AlertDescription>
-                      </Alert>
-                    )}
+            {/* Sidebar with CPV filter */}
+            <div className="lg:col-span-1">
+              <Card className="p-5 sticky top-28">
+                <CPVFilterPanel
+                  cpvs={cpvsData}
+                  selected={cpvsSeleccionados}
+                  onChange={(cpvs) => {
+                    setCpvsSeleccionados(cpvs);
+                    if (currentStep === 2) setCurrentStep(3);
+                  }}
+                  onApplyFilter={handleApplyFilter}
+                  onClearFilter={handleClearFilter}
+                  isLoading={isLoadingCPVs}
+                  isFiltering={loadingFiltradas}
+                  totalLicitaciones={licitacionesData?.count || 0}
+                  filteredCount={filteredLicitaciones?.count}
+                />
+              </Card>
+            </div>
+          </div>
+        )}
 
-                    {!loadingCPVs && cpvsData && cpvsData.count === 0 && (
-                      <Alert className="mt-2">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription className="text-xs">
-                          No hay códigos CPV disponibles en el backend. El endpoint devolvió una lista vacía.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </div>
-                )}
+        {/* Step 4: Detail view */}
+        {currentStep === 4 && licitacionSeleccionada && (
+          <LicitacionDetailView
+            licitacion={licitacionSeleccionada}
+            onBack={handleBackToStep2}
+          />
+        )}
+
+        {/* Loading state for initial search */}
+        {loadingLicitaciones && currentStep === 1 && (
+          <Card className="p-12 text-center mt-6">
+            <div className="flex flex-col items-center gap-4">
+              <Loader2 className="h-12 w-12 text-primary animate-spin" />
+              <div>
+                <h3 className="text-lg font-semibold text-foreground mb-2">
+                  Buscando licitaciones...
+                </h3>
+                <p className="text-muted-foreground">
+                  Esto puede tardar unos momentos. El backend está consultando las fuentes oficiales.
+                </p>
               </div>
-            </Card>
-
-            {/* Estadísticas */}
-            {licitacionesAMostrar && licitacionesAMostrar.count > 0 && (
-              <Card className="p-5 bg-primary/5 border-primary/20">
-                <div className="space-y-3">
-                  <div>
-                    <div className="text-3xl font-bold text-primary">{licitacionesAMostrar.count}</div>
-                    <div className="text-sm text-muted-foreground">Licitaciones encontradas</div>
-                  </div>
-
-                  {cpvsData && cpvsData.count > 0 && (
-                    <div className="pt-3 border-t border-primary/20">
-                      <div className="text-xl font-semibold text-foreground">{cpvsData.count}</div>
-                      <div className="text-sm text-muted-foreground">Códigos CPV disponibles</div>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            )}
-          </aside>
-
-          {/* Main content - Licitaciones */}
-          <main className="lg:col-span-2">
-            {/* Estado: Sin provincias seleccionadas */}
-            {provinciasSeleccionadas.length === 0 && (
-              <Card className="p-12 text-center">
-                <div className="flex flex-col items-center gap-4">
-                  <div className="p-4 bg-muted rounded-full">
-                    <FileSearch className="h-12 w-12 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground mb-2">Comienza tu búsqueda</h3>
-                    <p className="text-muted-foreground max-w-md">
-                      Selecciona una o varias provincias o comunidades autónomas en el panel de filtros para comenzar a
-                      explorar licitaciones públicas.
-                    </p>
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {/* Estado: Cargando */}
-            {isLoading && provinciasSeleccionadas.length > 0 && (
-              <Card className="p-12 text-center">
-                <div className="flex flex-col items-center gap-4">
-                  <Loader2 className="h-12 w-12 text-primary animate-spin" />
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground mb-2">Cargando licitaciones...</h3>
-                    <p className="text-muted-foreground">Esto puede tardar unos momentos</p>
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {/* Estado: Error */}
-            {(errorLicitaciones || errorFiltradas) && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Ha ocurrido un error al cargar las licitaciones. Por favor, verifica que el backend esté corriendo en{" "}
-                  {API_BASE_URL}.
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* Estado: Sin resultados */}
-            {!isLoading &&
-              licitacionesAMostrar &&
-              licitacionesAMostrar.count === 0 &&
-              provinciasSeleccionadas.length > 0 && (
-                <Card className="p-12 text-center">
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="p-4 bg-muted rounded-full">
-                      <AlertCircle className="h-12 w-12 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-foreground mb-2">No se encontraron licitaciones</h3>
-                      <p className="text-muted-foreground max-w-md">
-                        No hay licitaciones disponibles para los filtros seleccionados. Intenta cambiar las provincias o
-                        los códigos CPV.
-                      </p>
-                    </div>
-                  </div>
-                </Card>
-              )}
-
-            {/* Lista de licitaciones */}
-            {!isLoading && licitacionesAMostrar && licitacionesAMostrar.count > 0 && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-foreground">Resultados</h2>
-                  {cpvsSeleccionados.length > 0 && (
-                    <Badge variant="secondary">
-                      Filtrado por {cpvsSeleccionados.length} CPV{cpvsSeleccionados.length > 1 ? "s" : ""}
-                    </Badge>
-                  )}
-                </div>
-
-                <div className="grid gap-4">
-                  {licitacionesAMostrar.results.map((licitacion, index) => (
-                    <LicitacionCard
-                      key={licitacion.id || `licitacion-${index}`}
-                      licitacion={licitacion}
-                      onViewDetail={() => fetchDetalle(licitacion.url)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </main>
-        </div>
-      </div>
-
-      {/* Modal de detalle */}
-      <LicitacionDetail licitacion={licitacionSeleccionada} open={showDetail} onClose={() => setShowDetail(false)} />
+            </div>
+          </Card>
+        )}
+      </main>
     </div>
   );
 };
