@@ -21,8 +21,7 @@ import type {
 } from "@/types/licitacion";
 
 
-// src/config.ts
-export const API_BASE_URL = import.meta.env.VITE_API_URL!
+const API_BASE_URL = "https://licitaciones-backend-1.onrender.com";
 
 
 type Step = 1 | 2 | 3 | 4;
