@@ -20,7 +20,10 @@ import type {
   CPVResponse,
 } from "@/types/licitacion";
 
-const API_BASE_URL = "https://licitaciones-backend-1.onrender.com";
+
+// src/config.ts
+export const API_BASE_URL = import.meta.env.VITE_API_URL!
+
 
 type Step = 1 | 2 | 3 | 4;
 
