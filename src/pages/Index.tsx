@@ -20,7 +20,7 @@ import type {
   CPVResponse,
 } from "@/types/licitacion";
 
-const API_BASE_URL = "https://licitaciones-backend-1.onrender.com";
+const API_BASE_URL = "https://licitaciones-backend-j9os.onrender.com";
 
 type Step = 1 | 2 | 3 | 4;
 
