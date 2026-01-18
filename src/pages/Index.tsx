@@ -21,7 +21,9 @@ import type {
 } from "@/types/licitacion";
 
 
-const API_BASE_URL = "https://licitaciones-backend-1-t4qi.onrender.com";
+
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
+
 
 
 type Step = 1 | 2 | 3 | 4;
