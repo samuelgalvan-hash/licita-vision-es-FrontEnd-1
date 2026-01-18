@@ -21,7 +21,7 @@ import type {
 } from "@/types/licitacion";
 
 
-const API_BASE_URL = "https://licitaciones-backend-49ro.onrender.com";
+const API_BASE_URL = "https://licitaciones-backend-1-t4qi.onrender.com";
 
 
 type Step = 1 | 2 | 3 | 4;
